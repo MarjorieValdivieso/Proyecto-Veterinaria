@@ -604,4 +604,126 @@ INSERT INTO ventas (fecha_venta, total, id_cliente) VALUES
 ('2025-04-14',129.38,18),
 ('2026-06-24',14.25,11);
 
+-- CONSULTAS
+
+-- CONSULTA 1: Listado de clientes
+SELECT
+    id_cliente,
+    cedula,
+    nombres,
+    apellidos,
+    telefono,
+    correo,
+    direccion
+FROM clientes;
+
+-- CONSULTA 2: Mascotas registradas
+
+SELECT
+    id_mascota,
+    nombre,
+    especie,
+    raza,
+    sexo,
+    peso
+FROM mascotas;
+
+-- CONSULTA 3: Citas registradas por fecha
+
+SELECT
+    id_cita,
+    fecha,
+    hora,
+    motivo,
+    estado
+FROM citas
+ORDER BY fecha ASC;
+
+-- CONSULTA 4: Proveedores registrados
+
+SELECT
+    id_proveedor,
+    nombre_empresa,
+    telefono,
+    correo,
+    direccion
+FROM proveedores;
+
+
+-- CONSULTA 5: Veterinarios por especialidad
+
+SELECT
+    id_veterinario,
+    nombres,
+    apellidos,
+    especialidad,
+    telefono
+FROM veterinarios
+ORDER BY especialidad;
+
+-- CONSULTA 6: Mascotas con su dueño (JOIN)
+
+SELECT
+    m.id_mascota,
+    m.nombre AS nombre_mascota,
+    m.especie,
+    m.raza,
+    CONCAT(c.nombres, ' ', c.apellidos) AS dueno,
+    c.telefono
+FROM mascotas m
+INNER JOIN clientes c ON m.id_cliente = c.id_cliente;
+
+-- CONSULTA 7: Citas con mascota y veterinario (JOIN)
+
+SELECT
+    ci.id_cita,
+    ci.fecha,
+    ci.hora,
+    m.nombre AS mascota,
+    CONCAT(v.nombres, ' ', v.apellidos) AS veterinario,
+    ci.motivo,
+    ci.estado
+FROM citas ci
+INNER JOIN mascotas m ON ci.id_mascota = m.id_mascota
+INNER JOIN veterinarios v ON ci.id_veterinario = v.id_veterinario;
+
+-- CONSULTA 8: Detalle de tratamientos por consulta (JOIN)
+
+SELECT
+    co.id_consulta,
+    co.fecha_consulta,
+    m.nombre AS mascota,
+    t.descripcion,
+    t.medicamento,
+    t.dosis
+FROM tratamientos t
+INNER JOIN consultas co ON t.id_consulta = co.id_consulta
+INNER JOIN mascotas m ON co.id_mascota = m.id_mascota;
+
+
+-- CONSULTA 9: Inventario con su proveedor (JOIN)
+
+SELECT
+    i.id_producto,
+    i.nombre_producto,
+    i.stock,
+    i.precio,
+    i.fecha_caducidad,
+    p.nombre_empresa AS proveedor
+FROM inventario i
+INNER JOIN proveedores p ON i.id_proveedor = p.id_proveedor;
+
+
+-- CONSULTA 10: Vacunas con mascota y dueño (JOIN)
+
+SELECT
+    va.id_vacuna,
+    va.nombre_vacuna,
+    va.fecha_aplicacion,
+    va.proxima_dosis,
+    m.nombre AS mascota,
+    CONCAT(c.nombres, ' ', c.apellidos) AS dueno
+FROM vacunas va
+INNER JOIN mascotas m ON va.id_mascota = m.id_mascota
+INNER JOIN clientes c ON m.id_cliente = c.id_cliente;
 
