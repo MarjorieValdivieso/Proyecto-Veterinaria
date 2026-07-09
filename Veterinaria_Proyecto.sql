@@ -726,4 +726,107 @@ SELECT
 FROM vacunas va
 INNER JOIN mascotas m ON va.id_mascota = m.id_mascota
 INNER JOIN clientes c ON m.id_cliente = c.id_cliente;
+--  CONSULTA 11. Total de ventas por mes 
+SELECT
+    DATE_FORMAT(fecha_venta, '%Y-%m') AS Mes,
+    COUNT(*) AS TotalVentas,
+    SUM(total) AS MontoTotal
+FROM ventas
+GROUP BY Mes
+ORDER BY Mes;
 
+-- CONSULTA 12. Compras por cliente 
+SELECT
+    CONCAT(c.nombres, ' ', c.apellidos) AS Cliente,
+    COUNT(v.id_venta) AS CantidadCompras,
+    SUM(v.total) AS MontoAcumulado
+FROM clientes c
+INNER JOIN ventas v ON c.id_cliente = v.id_cliente
+GROUP BY c.id_cliente, Cliente
+ORDER BY MontoAcumulado DESC;
+-- CONSULTA 13. Citas atendidas por veterinario 
+SELECT
+    CONCAT(vet.nombres, ' ', vet.apellidos) AS Veterinario,
+    COUNT(ci.id_cita) AS CantidadCitasAtendidas
+FROM veterinarios vet
+LEFT JOIN citas ci ON vet.id_veterinario = ci.id_veterinario AND ci.estado = 'Atendida'
+GROUP BY vet.id_veterinario, Veterinario
+ORDER BY CantidadCitasAtendidas DESC;
+-- CONSULTA 14. Medicamentos más recetados 
+SELECT
+    medicamento AS Medicamento,
+    COUNT(*) AS TotalRecetas
+FROM tratamientos
+GROUP BY medicamento
+ORDER BY TotalRecetas DESC;
+-- CONSULTA15. Citas canceladas por veterinario 
+SELECT
+    CONCAT(vet.nombres, ' ', vet.apellidos) AS Veterinario,
+    COUNT(ci.id_cita) AS TotalCitasCanceladas
+FROM veterinarios vet
+LEFT JOIN citas ci ON vet.id_veterinario = ci.id_veterinario AND ci.estado = 'Cancelada'
+GROUP BY vet.id_veterinario, Veterinario
+ORDER BY TotalCitasCanceladas DESC;
+-- CONSULTA 16. Clientes con compras superiores al promedio 
+SELECT
+    CONCAT(c.nombres, ' ', c.apellidos) AS Cliente,
+    SUM(v.total) AS TotalComprado
+FROM clientes c
+INNER JOIN ventas v ON c.id_cliente = v.id_cliente
+GROUP BY c.id_cliente, Cliente
+HAVING SUM(v.total) > (
+    SELECT AVG(total_por_cliente)
+    FROM (
+        SELECT SUM(total) AS total_por_cliente
+        FROM ventas
+        GROUP BY id_cliente
+    ) AS sub
+)
+ORDER BY TotalComprado DESC;
+-- CONSULTA 17. Productos con precio mayor al promedio 
+SELECT
+    nombre_producto AS Producto,
+    precio AS Precio
+FROM inventario
+WHERE precio > (SELECT AVG(precio) FROM inventario)
+ORDER BY precio DESC;
+-- CONSULTA 18. Veterinarios con más citas atendidas que el promedio 
+SELECT
+    CONCAT(vet.nombres, ' ', vet.apellidos) AS Veterinario,
+    COUNT(ci.id_cita) AS TotalCitasAtendidas
+FROM veterinarios vet
+INNER JOIN citas ci ON vet.id_veterinario = ci.id_veterinario
+WHERE ci.estado = 'Atendida'
+GROUP BY vet.id_veterinario, Veterinario
+HAVING COUNT(ci.id_cita) > (
+    SELECT AVG(total_citas)
+    FROM (
+        SELECT COUNT(*) AS total_citas
+        FROM citas
+        WHERE estado = 'Atendida'
+        GROUP BY id_veterinario
+    ) AS sub
+)
+ORDER BY TotalCitasAtendidas DESC;
+-- CONSULTA 19. Productos que nunca han sido recetados 
+SELECT
+    id_producto AS IdProducto,
+    nombre_producto AS NombreProducto,
+    stock AS StockActual
+FROM inventario
+WHERE nombre_producto NOT IN (
+    SELECT DISTINCT medicamento
+    FROM tratamientos
+    WHERE medicamento IS NOT NULL
+);
+-- CONSULTA 20. Clientes que no han realizado compras 
+SELECT
+    id_cliente AS IdCliente,
+    nombres AS Nombres,
+    apellidos AS Apellidos,
+    telefono AS Telefono
+FROM clientes
+WHERE id_cliente NOT IN (
+    SELECT DISTINCT id_cliente
+    FROM ventas
+);
