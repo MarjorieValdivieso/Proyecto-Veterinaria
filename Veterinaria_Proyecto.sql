@@ -830,3 +830,107 @@ WHERE id_cliente NOT IN (
     SELECT DISTINCT id_cliente
     FROM ventas
 );
+
+-- USUARIOS, ROLES Y PRIVILEGIOS 
+USE Veterinaria_Proyecto;
+ 
+-- 1. Rol: Admin
+
+CREATE ROLE IF NOT EXISTS rol_administrador;
+GRANT ALL PRIVILEGES ON Veterinaria_Proyecto.* TO rol_administrador;
+ 
+CREATE USER IF NOT EXISTS 'usuario_admin'@'localhost' IDENTIFIED BY 'Admin_2026*';
+GRANT rol_administrador TO 'usuario_admin'@'localhost';
+SET DEFAULT ROLE rol_administrador TO 'usuario_admin'@'localhost';
+ 
+-- 2. Rol:Gerente
+
+CREATE ROLE IF NOT EXISTS rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.clientes        TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.mascotas         TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.veterinarios     TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.citas            TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.consultas        TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.tratamientos     TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.vacunas          TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.inventario       TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.proveedores      TO rol_gerente;
+GRANT SELECT ON Veterinaria_Proyecto.ventas           TO rol_gerente;
+
+-- Para ejecutar
+GRANT EXECUTE ON Veterinaria_Proyecto.* TO rol_gerente;
+ 
+CREATE USER IF NOT EXISTS 'usuario_gerente'@'localhost' IDENTIFIED BY 'Gerente_2026*';
+GRANT rol_gerente TO 'usuario_gerente'@'localhost';
+SET DEFAULT ROLE rol_gerente TO 'usuario_gerente'@'localhost';
+ 
+ 
+-- 3. Rol: Veterinario
+-- Atiende consultas, registra diagnósticos, tratamientos y vacunas
+CREATE ROLE IF NOT EXISTS rol_veterinario;
+GRANT SELECT ON Veterinaria_Proyecto.clientes            TO rol_veterinario;
+GRANT SELECT ON Veterinaria_Proyecto.mascotas             TO rol_veterinario;
+GRANT SELECT, UPDATE ON Veterinaria_Proyecto.citas        TO rol_veterinario;
+GRANT SELECT, INSERT, UPDATE ON Veterinaria_Proyecto.consultas    TO rol_veterinario;
+GRANT SELECT, INSERT, UPDATE ON Veterinaria_Proyecto.tratamientos TO rol_veterinario;
+GRANT SELECT, INSERT, UPDATE ON Veterinaria_Proyecto.vacunas      TO rol_veterinario;
+GRANT EXECUTE ON Veterinaria_Proyecto.* TO rol_veterinario;
+ 
+CREATE USER IF NOT EXISTS 'usuario_veterinario'@'localhost' IDENTIFIED BY 'Vet_2026*';
+GRANT rol_veterinario TO 'usuario_veterinario'@'localhost';
+SET DEFAULT ROLE rol_veterinario TO 'usuario_veterinario'@'localhost';
+ 
+-- 4. Rol: Cajero 
+-- Registra clientes, mascotas, agenda citas y cobra ventas
+
+CREATE ROLE IF NOT EXISTS rol_recepcionista;
+GRANT SELECT, INSERT, UPDATE ON Veterinaria_Proyecto.clientes  TO rol_recepcionista;
+GRANT SELECT, INSERT, UPDATE ON Veterinaria_Proyecto.mascotas   TO rol_recepcionista;
+GRANT SELECT ON Veterinaria_Proyecto.veterinarios               TO rol_recepcionista;
+GRANT SELECT, INSERT, UPDATE ON Veterinaria_Proyecto.citas      TO rol_recepcionista;
+GRANT SELECT, INSERT ON Veterinaria_Proyecto.ventas             TO rol_recepcionista;
+GRANT SELECT ON Veterinaria_Proyecto.inventario                 TO rol_recepcionista;
+GRANT EXECUTE ON Veterinaria_Proyecto.* TO rol_recepcionista;
+ 
+CREATE USER IF NOT EXISTS 'usuario_recepcionista'@'localhost' IDENTIFIED BY 'Recep_2026*';
+GRANT rol_recepcionista TO 'usuario_recepcionista'@'localhost';
+SET DEFAULT ROLE rol_recepcionista TO 'usuario_recepcionista'@'localhost';
+ 
+-- 5. Rol: Auxiliar de Inventario
+
+CREATE ROLE IF NOT EXISTS rol_auxiliar_inventario;
+GRANT SELECT ON Veterinaria_Proyecto.proveedores                  TO rol_auxiliar_inventario;
+GRANT SELECT, INSERT, UPDATE ON Veterinaria_Proyecto.inventario   TO rol_auxiliar_inventario;
+ 
+CREATE USER IF NOT EXISTS 'usuario_auxiliar'@'localhost' IDENTIFIED BY 'Auxiliar_2026*';
+GRANT rol_auxiliar_inventario TO 'usuario_auxiliar'@'localhost';
+SET DEFAULT ROLE rol_auxiliar_inventario TO 'usuario_auxiliar'@'localhost';
+ 
+-- 6. Rol: Auditor 
+-- Solo lectura sobre toda la base
+
+CREATE ROLE IF NOT EXISTS rol_auditor;
+GRANT SELECT ON Veterinaria_Proyecto.* TO rol_auditor;
+REVOKE INSERT, UPDATE, DELETE ON Veterinaria_Proyecto.* FROM rol_auditor;
+ 
+CREATE USER IF NOT EXISTS 'usuario_auditor'@'localhost' IDENTIFIED BY 'Auditor_2026*';
+GRANT rol_auditor TO 'usuario_auditor'@'localhost';
+SET DEFAULT ROLE rol_auditor TO 'usuario_auditor'@'localhost';
+ 
+-- Para aplicar los cambios priviligeados 
+FLUSH PRIVILEGES;
+ -- Ver los usuarios que creamos
+SELECT User, Host FROM mysql.user
+WHERE User IN (
+    'usuario_admin','usuario_gerente','usuario_veterinario',
+    'usuario_recepcionista','usuario_auxiliar','usuario_auditor'
+);
+ 
+-- Ver los privilegios otorgados a cada usuario 
+SHOW GRANTS FOR 'usuario_admin'@'localhost';
+SHOW GRANTS FOR 'usuario_gerente'@'localhost';
+SHOW GRANTS FOR 'usuario_veterinario'@'localhost';
+SHOW GRANTS FOR 'usuario_recepcionista'@'localhost';
+SHOW GRANTS FOR 'usuario_auxiliar'@'localhost';
+SHOW GRANTS FOR 'usuario_auditor'@'localhost';
+
