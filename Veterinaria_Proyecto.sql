@@ -934,3 +934,51 @@ SHOW GRANTS FOR 'usuario_recepcionista'@'localhost';
 SHOW GRANTS FOR 'usuario_auxiliar'@'localhost';
 SHOW GRANTS FOR 'usuario_auditor'@'localhost';
 
+-- VISTAS
+
+CREATE VIEW vista_clientes_frecuentes AS
+SELECT c.id_cliente, c.nombres, c.apellidos,
+       COUNT(v.id_venta) AS TotalCompras,
+       SUM(v.total) AS MontoAcumulado
+FROM clientes c
+JOIN ventas v ON c.id_cliente = v.id_cliente
+GROUP BY c.id_cliente;
+
+CREATE VIEW vista_ventas_consolidadas AS
+SELECT v.id_venta, v.fecha_venta,
+       CONCAT(c.nombres,' ',c.apellidos) AS Cliente,
+       v.total
+FROM ventas v
+JOIN clientes c ON v.id_cliente = c.id_cliente;
+
+CREATE VIEW vista_productos_bajo_stock AS
+SELECT id_producto, nombre_producto, stock
+FROM inventario
+WHERE stock < 20;
+
+CREATE VIEW vista_vacunas_proximas AS
+SELECT va.id_vacuna, va.nombre_vacuna, m.nombre AS Mascota,
+       CONCAT(c.nombres,' ',c.apellidos) AS Dueno,
+       va.proxima_dosis
+FROM vacunas va
+JOIN mascotas m ON va.id_mascota = m.id_mascota
+JOIN clientes c ON m.id_cliente = c.id_cliente
+WHERE va.proxima_dosis >= CURDATE();
+
+CREATE VIEW vista_citas_canceladas AS
+SELECT ci.id_cita, ci.fecha, m.nombre AS Mascota,
+       CONCAT(v.nombres,' ',v.apellidos) AS Veterinario,
+       ci.motivo
+FROM citas ci
+JOIN mascotas m ON ci.id_mascota = m.id_mascota
+JOIN veterinarios v ON ci.id_veterinario = v.id_veterinario
+WHERE ci.estado = 'Cancelada';
+
+CREATE VIEW vista_desempeno_veterinarios AS
+SELECT vet.id_veterinario,
+       CONCAT(vet.nombres,' ',vet.apellidos) AS Veterinario,
+       COUNT(ci.id_cita) AS TotalCitasAtendidas
+FROM veterinarios vet
+JOIN citas ci ON vet.id_veterinario = ci.id_veterinario
+WHERE ci.estado = 'Atendida'
+GROUP BY vet.id_veterinario;
