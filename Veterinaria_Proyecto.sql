@@ -982,3 +982,94 @@ FROM veterinarios vet
 JOIN citas ci ON vet.id_veterinario = ci.id_veterinario
 WHERE ci.estado = 'Atendida'
 GROUP BY vet.id_veterinario;
+
+-- FUNCIONES
+
+-- 1. Calcular Edad de una Mascota
+DELIMITER $$
+
+CREATE FUNCTION CalcularEdadMascota(fechaNacimiento DATE)
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    RETURN TIMESTAMPDIFF(YEAR, fechaNacimiento, CURDATE());
+END$$
+
+DELIMITER ;
+-- 2. Calcular IVA de una Venta (15%)
+DELIMITER $$
+
+CREATE FUNCTION CalcularIVA(total DECIMAL(10,2))
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+    RETURN total * 0.15;
+END$$
+
+DELIMITER ;
+-- 3. Calcular Descuento
+DELIMITER $$
+
+CREATE FUNCTION CalcularDescuento(total DECIMAL(10,2))
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+    IF total >= 100 THEN
+        RETURN total * 0.10;
+    ELSE
+        RETURN 0;
+    END IF;
+END$$
+
+DELIMITER ;
+-- 4. Productos Bajo Stock
+DELIMITER $$
+
+CREATE FUNCTION ProductosBajoStock()
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE cantidad INT;
+
+    SELECT COUNT(*)
+    INTO cantidad
+    FROM inventario
+    WHERE stock < 20;
+
+    RETURN cantidad;
+END$$
+
+DELIMITER ;
+-- 5. Clientes Frecuentes
+DELIMITER $$
+
+CREATE FUNCTION ClientesFrecuentes()
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE cantidad INT;
+
+    SELECT COUNT(*)
+    INTO cantidad
+    FROM (
+        SELECT id_cliente
+        FROM ventas
+        GROUP BY id_cliente
+        HAVING COUNT(*) >= 3
+    ) AS clientes;
+
+    RETURN cantidad;
+END$$
+
+DELIMITER ;
+-- 6. Calcular Total con IVA
+DELIMITER $$
+
+CREATE FUNCTION TotalConIVA(total DECIMAL(10,2))
+RETURNS DECIMAL(10,2)
+DETERMINISTIC
+BEGIN
+    RETURN total + (total * 0.15);
+END$$
+
+DELIMITER ;
