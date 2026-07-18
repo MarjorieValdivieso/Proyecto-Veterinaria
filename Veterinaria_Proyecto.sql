@@ -1355,3 +1355,72 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+-- TRIGGERS
+
+-- 1. Auditoría INSERT Clientes: registra usuario, fecha y operación
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_insert_clientes
+AFTER INSERT ON clientes
+FOR EACH ROW
+BEGIN
+    INSERT INTO auditoria(usuario, accion, tabla_afectada)
+    VALUES(CURRENT_USER(), CONCAT('INSERT - Cliente registrado: ', NEW.nombres, ' ', NEW.apellidos), 'clientes');
+END$$
+
+DELIMITER ;
+
+-- 2. Auditoría UPDATE Clientes: registra valores anteriores y nuevos
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_update_clientes
+AFTER UPDATE ON clientes
+FOR EACH ROW
+BEGIN
+    INSERT INTO auditoria(usuario, accion, tabla_afectada)
+    VALUES(CURRENT_USER(), CONCAT('UPDATE - Antes: ', OLD.telefono, '/', OLD.correo, ' | Ahora: ', NEW.telefono, '/', NEW.correo), 'clientes');
+END$$
+
+DELIMITER ;
+
+
+-- 3. Auditoría DELETE Clientes: registra el registro eliminado
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_delete_clientes
+AFTER DELETE ON clientes
+FOR EACH ROW
+BEGIN
+    INSERT INTO auditoria(usuario, accion, tabla_afectada)
+    VALUES(CURRENT_USER(), CONCAT('DELETE - Cliente eliminado: ', OLD.nombres, ' ', OLD.apellidos, ' (cédula ', OLD.cedula, ')'), 'clientes');
+END$$
+
+DELIMITER ;
+
+-- 4. Auditoría al Agendar una Cita
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_insert_cita
+AFTER INSERT ON citas
+FOR EACH ROW
+BEGIN
+    INSERT INTO auditoria(usuario, accion, tabla_afectada)
+    VALUES(CURRENT_USER(), CONCAT('Nueva cita agendada para la mascota ', NEW.id_mascota, ' el ', NEW.fecha, ' a las ', NEW.hora), 'citas');
+END$$
+
+DELIMITER ;
+
+-- 5. Incrementar Stock por Devolución
+DELIMITER $$
+
+CREATE TRIGGER trg_incrementar_stock_devolucion
+AFTER INSERT ON devoluciones
+FOR EACH ROW
+BEGIN
+    UPDATE inventario
+    SET stock = stock + NEW.cantidad
+    WHERE id_producto = NEW.id_producto;
+END$$
+
+DELIMITER ;
