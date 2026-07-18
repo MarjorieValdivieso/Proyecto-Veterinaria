@@ -276,7 +276,41 @@ CREATE TABLE ventas (
     ON DELETE RESTRICT
 
 ); 
+-- TABLA DEVOLUCIONES
 
+CREATE TABLE devoluciones (
+    id_devolucion INT AUTO_INCREMENT PRIMARY KEY,
+    id_cliente INT NOT NULL,
+    id_producto INT NOT NULL,
+    cantidad INT NOT NULL,
+    motivo VARCHAR(200),
+    fecha_devolucion DATE DEFAULT (CURRENT_DATE),
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente),
+    FOREIGN KEY (id_producto) REFERENCES inventario(id_producto)
+);
+-- TABLA QUEJAS
+CREATE TABLE quejas (
+    id_queja INT AUTO_INCREMENT PRIMARY KEY,
+    id_cliente INT NOT NULL,
+    descripcion TEXT NOT NULL,
+    fecha_queja DATE DEFAULT (CURRENT_DATE),
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente)
+);
+-- TABLA AUDITORIA
+
+CREATE TABLE auditoria(
+
+id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
+
+usuario VARCHAR(100),
+
+accion VARCHAR(200),
+	
+tabla_afectada VARCHAR(100),
+
+fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+
+);
 -- Insertar datos 
 -- CLIENTES (30 registros)
 
@@ -1076,441 +1110,248 @@ DELIMITER ;
 
 -- Procedimiento Almacenado
 
--- 1.REGISTRAR CLIENTE:
--- Valida que la cedula no exista y registra un nuevo cliente.
+-- 1. REGISTRAR CLIENTE
+-- Valida que la cédula no exista y registra un nuevo cliente.
+
 DELIMITER $$
 
 CREATE PROCEDURE RegistrarCliente(
-
-IN p_cedula VARCHAR(10),
-IN p_nombres VARCHAR(100),
-IN p_apellidos VARCHAR(100),
-IN p_telefono VARCHAR(15),
-IN p_correo VARCHAR(100),
-IN p_direccion VARCHAR(150)
-
+    IN p_cedula VARCHAR(10),
+    IN p_nombres VARCHAR(100),
+    IN p_apellidos VARCHAR(100),
+    IN p_telefono VARCHAR(15),
+    IN p_correo VARCHAR(100),
+    IN p_direccion VARCHAR(150)
 )
-
 BEGIN
-
-IF EXISTS(
-SELECT * FROM clientes 
-WHERE cedula=p_cedula
-)
-
-THEN
-
-SIGNAL SQLSTATE '45000'
-SET MESSAGE_TEXT='Cliente ya registrado';
-
-
-ELSE
-
-
-INSERT INTO clientes(
-cedula,nombres,apellidos,telefono,correo,direccion
-)
-
-VALUES(
-p_cedula,
-p_nombres,
-p_apellidos,
-p_telefono,
-p_correo,
-p_direccion
-);
-
-
-END IF;
-
-
+    IF EXISTS(SELECT * FROM clientes WHERE cedula = p_cedula) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Cliente ya registrado';
+    ELSE
+        INSERT INTO clientes(cedula, nombres, apellidos, telefono, correo, direccion)
+        VALUES(p_cedula, p_nombres, p_apellidos, p_telefono, p_correo, p_direccion);
+    END IF;
 END$$
 
 DELIMITER ;
--- 2.REGISTRAR MASCOTA:
--- Valida que el cliente exista antes de registrar la mascota.
+
+
+-- 2. DAR DE BAJA PRODUCTO
+-- Retira unidades del inventario por caducidad o daño,
+-- validando que exista suficiente stock antes de descontar.
+
 DELIMITER $$
 
-CREATE PROCEDURE RegistrarMascota(
-
-IN p_nombre VARCHAR(100),
-IN p_especie VARCHAR(50),
-IN p_raza VARCHAR(50),
-IN p_sexo VARCHAR(20),
-IN p_fecha DATE,
-IN p_peso DECIMAL(5,2),
-IN p_cliente INT
-
+CREATE PROCEDURE DarDeBajaProducto(
+    IN p_producto INT,
+    IN p_cantidad INT,
+    IN p_motivo VARCHAR(200)
 )
-
 BEGIN
+    DECLARE stockActual INT;
 
+    IF NOT EXISTS(SELECT * FROM inventario WHERE id_producto = p_producto) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Producto inexistente';
+    ELSE
+        SELECT stock INTO stockActual
+        FROM inventario
+        WHERE id_producto = p_producto;
 
-IF NOT EXISTS(
-SELECT * FROM clientes
-WHERE id_cliente=p_cliente
-)
+        IF stockActual < p_cantidad THEN
+            SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'No hay suficiente stock para dar de baja';
+        ELSE
+            UPDATE inventario
+            SET stock = stock - p_cantidad
+            WHERE id_producto = p_producto;
 
-THEN
-
-SIGNAL SQLSTATE '45000'
-SET MESSAGE_TEXT='Cliente inexistente';
-
-
-ELSE
-
-
-INSERT INTO mascotas(
-nombre,
-especie,
-raza,
-sexo,
-fecha_nacimiento,
-peso,
-id_cliente
-)
-
-VALUES(
-p_nombre,
-p_especie,
-p_raza,
-p_sexo,
-p_fecha,
-p_peso,
-p_cliente
-);
-
-
-END IF;
-
-
+            INSERT INTO auditoria(usuario, accion, tabla_afectada)
+            VALUES(CURRENT_USER(), CONCAT('Baja de ', p_cantidad, ' unidades. Motivo: ', p_motivo), 'inventario');
+        END IF;
+    END IF;
 END$$
 
 DELIMITER ;
--- 3.REGISTRAR CITA
--- Verifica que exista mascota y veterinario antes de crear la cita.
-DELIMITER $$
 
-CREATE PROCEDURE RegistrarCita(
+-- 3. REGISTRAR VENTA
+-- Registra venta, aplica promoción (CalcularDescuento) y descuenta inventario.
 
-IN p_fecha DATE,
-IN p_hora TIME,
-IN p_motivo VARCHAR(200),
-IN p_mascota INT,
-IN p_veterinario INT
-
-)
-
-BEGIN
-
-
-IF EXISTS(
-SELECT * FROM mascotas
-WHERE id_mascota=p_mascota
-)
-
-AND EXISTS(
-SELECT * FROM veterinarios
-WHERE id_veterinario=p_veterinario
-)
-
-THEN
-
-
-INSERT INTO citas(
-fecha,
-hora,
-motivo,
-estado,
-id_mascota,
-id_veterinario
-)
-
-VALUES(
-p_fecha,
-p_hora,
-p_motivo,
-'Pendiente',
-p_mascota,
-p_veterinario
-);
-
-
-ELSE
-
-
-SIGNAL SQLSTATE '45000'
-SET MESSAGE_TEXT='Mascota o veterinario no existe';
-
-
-END IF;
-
-
-END$$
-
-DELIMITER ;
--- 4.REGISTRAR CONSULTA
--- Guarda diagnóstico y observaciones de una atención veterinaria.
-DELIMITER $$
-
-CREATE PROCEDURE RegistrarConsulta(
-
-IN p_fecha DATE,
-IN p_diagnostico TEXT,
-IN p_observacion TEXT,
-IN p_mascota INT,
-IN p_veterinario INT
-
-)
-
-BEGIN
-
-
-INSERT INTO consultas(
-fecha_consulta,
-diagnostico,
-observaciones,
-id_mascota,
-id_veterinario
-)
-
-VALUES(
-p_fecha,
-p_diagnostico,
-p_observacion,
-p_mascota,
-p_veterinario
-);
-
-
-END$$
-
-DELIMITER ;
--- 5.REGISTRAR VENTA
--- Registra una venta y descuenta automáticamente el inventario.
 DELIMITER $$
 
 CREATE PROCEDURE RegistrarVenta(
-
-IN p_cliente INT,
-IN p_producto INT,
-IN p_cantidad INT
-
+    IN p_cliente INT,
+    IN p_producto INT,
+    IN p_cantidad INT
 )
-
 BEGIN
+    DECLARE precioProducto DECIMAL(10,2);
+    DECLARE stockActual INT;
+    DECLARE totalBruto DECIMAL(10,2);
+    DECLARE descuento DECIMAL(10,2);
 
-DECLARE precioProducto DECIMAL(10,2);
-DECLARE stockActual INT;
+    SELECT precio, stock
+    INTO precioProducto, stockActual
+    FROM inventario
+    WHERE id_producto = p_producto;
 
+    IF stockActual >= p_cantidad THEN
 
-SELECT precio,stock
-INTO precioProducto,stockActual
+        SET totalBruto = precioProducto * p_cantidad;
+        SET descuento = CalcularDescuento(totalBruto);
 
-FROM inventario
+        INSERT INTO ventas(fecha_venta, total, id_cliente)
+        VALUES(CURDATE(), totalBruto - descuento, p_cliente);
 
-WHERE id_producto=p_producto;
+        UPDATE inventario
+        SET stock = stock - p_cantidad
+        WHERE id_producto = p_producto;
 
-
-IF stockActual >= p_cantidad THEN
-
-
-INSERT INTO ventas(
-fecha_venta,
-total,
-id_cliente
-)
-
-VALUES(
-CURDATE(),
-precioProducto*p_cantidad,
-p_cliente
-);
-
-
-
-UPDATE inventario
-
-SET stock=stock-p_cantidad
-
-WHERE id_producto=p_producto;
-
-
-ELSE
-
-
-SIGNAL SQLSTATE '45000'
-SET MESSAGE_TEXT='Stock insuficiente';
-
-
-END IF;
-
-
+    ELSE
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Stock insuficiente';
+    END IF;
 END$$
 
 DELIMITER ;
--- 6.ACTUALIZAR INVENTARIO
--- Permite registrar entradas y salidas de productos.
+
+-- 4. REGISTRAR DEVOLUCIÓN
+-- Registra la devolución e incrementa el stock automáticamente.
+
 DELIMITER $$
 
-CREATE PROCEDURE ActualizarInventario(
-
-IN p_producto INT,
-IN p_cantidad INT,
-IN p_movimiento VARCHAR(10)
-
+CREATE PROCEDURE RegistrarDevolucion(
+    IN p_cliente INT,
+    IN p_producto INT,
+    IN p_cantidad INT,
+    IN p_motivo VARCHAR(200)
 )
-
 BEGIN
+    IF NOT EXISTS(SELECT * FROM inventario WHERE id_producto = p_producto) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Producto inexistente';
+    ELSE
+        INSERT INTO devoluciones(id_cliente, id_producto, cantidad, motivo)
+        VALUES(p_cliente, p_producto, p_cantidad, p_motivo);
 
-
-IF p_movimiento='ENTRADA' THEN
-
-
-UPDATE inventario
-SET stock=stock+p_cantidad
-WHERE id_producto=p_producto;
-
-
-ELSE
-
-
-UPDATE inventario
-SET stock=stock-p_cantidad
-WHERE id_producto=p_producto;
-
-
-END IF;
-
-
+        UPDATE inventario
+        SET stock = stock + p_cantidad
+        WHERE id_producto = p_producto;
+    END IF;
 END$$
 
 DELIMITER ;
--- 7.REGISTRAR VACUNA
--- Guarda la aplicacion de vacunas y proxima dosis.
+
+-- 5. APLICAR PROMOCIÓN
+-- Verifica si el total califica para descuento y devuelve el monto calculado.
+
 DELIMITER $$
 
-CREATE PROCEDURE RegistrarVacuna(
-
-IN p_nombre VARCHAR(100),
-IN p_fecha DATE,
-IN p_proxima DATE,
-IN p_mascota INT
-
+CREATE PROCEDURE AplicarPromocion(
+    IN p_total DECIMAL(10,2),
+    OUT p_descuento DECIMAL(10,2),
+    OUT p_totalFinal DECIMAL(10,2)
 )
-
 BEGIN
-
-
-INSERT INTO vacunas(
-nombre_vacuna,
-fecha_aplicacion,
-proxima_dosis,
-id_mascota
-)
-
-VALUES(
-p_nombre,
-p_fecha,
-p_proxima,
-p_mascota
-);
-
-
+    SET p_descuento = CalcularDescuento(p_total);
+    SET p_totalFinal = p_total - p_descuento;
 END$$
 
 DELIMITER ;
--- 8.CAMBIAR ESTADO DE CITA
--- Actualiza una cita como atendida, pendiente o cancelada.
-DELIMITER $$
 
-CREATE PROCEDURE CambiarEstadoCita(
-
-IN p_cita INT,
-IN p_estado VARCHAR(30)
-
-)
-
-BEGIN
-
-
-UPDATE citas
-
-SET estado=p_estado
-
-WHERE id_cita=p_cita;
-
-
-END$$
-
-DELIMITER ;
--- 9.CALCULAR VENTAS MENSUALES
+-- 6. CALCULAR VENTAS MENSUALES
 -- Genera reporte del total vendido por cada mes.
+
 DELIMITER $$
 
 CREATE PROCEDURE CalcularVentasMensuales()
-
 BEGIN
-
-
-SELECT
-
-DATE_FORMAT(fecha_venta,'%Y-%m') AS Mes,
-
-COUNT(*) AS CantidadVentas,
-
-SUM(total) AS TotalVendido
-
-
-FROM ventas
-
-GROUP BY Mes
-
-ORDER BY Mes;
-
-
+    SELECT
+        DATE_FORMAT(fecha_venta, '%Y-%m') AS Mes,
+        COUNT(*) AS CantidadVentas,
+        SUM(total) AS TotalVendido
+    FROM ventas
+    GROUP BY Mes
+    ORDER BY Mes;
 END$$
 
 DELIMITER ;
 
--- 10.REGISTRAR AUDITORIA
--- Guarda usuario, acción realizada y fecha del evento.
--- Primero  se crea la tabla:
-CREATE TABLE auditoria(
+-- 7. REGISTRAR PROVEEDOR
+-- Almacena los datos completos del proveedor.
 
-id_auditoria INT AUTO_INCREMENT PRIMARY KEY,
+DELIMITER $$
 
-usuario VARCHAR(100),
+CREATE PROCEDURE RegistrarProveedor(
+    IN p_nombre_empresa VARCHAR(100),
+    IN p_telefono VARCHAR(15),
+    IN p_correo VARCHAR(100),
+    IN p_direccion VARCHAR(150)
+)
+BEGIN
+    INSERT INTO proveedores(nombre_empresa, telefono, correo, direccion)
+    VALUES(p_nombre_empresa, p_telefono, p_correo, p_direccion);
+END$$
 
-accion VARCHAR(200),
+DELIMITER ;
 
-fecha DATETIME DEFAULT CURRENT_TIMESTAMP
+-- 8. ACTUALIZAR INVENTARIO
+-- Incrementa o disminuye stock según el tipo de movimiento.
+DELIMITER $$
 
-);
--- Procedimiento
+CREATE PROCEDURE ActualizarInventario(
+    IN p_producto INT,
+    IN p_cantidad INT,
+    IN p_movimiento VARCHAR(10)
+)
+BEGIN
+    IF p_movimiento = 'ENTRADA' THEN
+        UPDATE inventario
+        SET stock = stock + p_cantidad
+        WHERE id_producto = p_producto;
+    ELSE
+        UPDATE inventario
+        SET stock = stock - p_cantidad
+        WHERE id_producto = p_producto;
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- 9. REGISTRAR QUEJA
+-- Almacena reclamos y sugerencias de los clientes.
+
+DELIMITER $$
+
+CREATE PROCEDURE RegistrarQueja(
+    IN p_cliente INT,
+    IN p_descripcion TEXT
+)
+BEGIN
+    IF NOT EXISTS(SELECT * FROM clientes WHERE id_cliente = p_cliente) THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Cliente inexistente';
+    ELSE
+        INSERT INTO quejas(id_cliente, descripcion)
+        VALUES(p_cliente, p_descripcion);
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- 10. REGISTRAR AUDITORÍA
+-- Guarda acción, usuario, fecha y tabla afectada.
+
 DELIMITER $$
 
 CREATE PROCEDURE RegistrarAuditoria(
-
-IN p_usuario VARCHAR(100),
-IN p_accion VARCHAR(200)
-
+    IN p_usuario VARCHAR(100),
+    IN p_accion VARCHAR(200),
+    IN p_tabla_afectada VARCHAR(100)
 )
-
 BEGIN
-
-
-INSERT INTO auditoria(
-usuario,
-accion
-)
-
-VALUES(
-p_usuario,
-p_accion
-);
-
-
+    INSERT INTO auditoria(usuario, accion, tabla_afectada)
+    VALUES(p_usuario, p_accion, p_tabla_afectada);
 END$$
 
 DELIMITER ;
