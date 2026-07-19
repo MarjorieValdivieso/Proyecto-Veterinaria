@@ -1424,3 +1424,78 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+-- 6. Control de Stock Negativo
+DELIMITER $$
+
+CREATE TRIGGER trg_control_stock_negativo
+BEFORE UPDATE ON inventario
+FOR EACH ROW
+BEGIN
+    IF NEW.stock < 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'El stock no puede quedar en negativo';
+    END IF;
+END$$
+
+DELIMITER ;
+
+
+-- 7. Registro de Cambio de Precio
+DELIMITER $$
+
+CREATE TRIGGER trg_registro_cambio_precio
+AFTER UPDATE ON inventario
+FOR EACH ROW
+BEGIN
+    IF OLD.precio <> NEW.precio THEN
+        INSERT INTO auditoria(usuario, accion, tabla_afectada)
+        VALUES(CURRENT_USER(), CONCAT('Precio de ', NEW.nombre_producto, ' cambiado de $', OLD.precio, ' a $', NEW.precio), 'inventario');
+    END IF;
+END$$
+
+DELIMITER ;
+
+
+-- 8. Auditoría al Registrar una Vacuna
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_insert_vacuna
+AFTER INSERT ON vacunas
+FOR EACH ROW
+BEGIN
+    INSERT INTO auditoria(usuario, accion, tabla_afectada)
+    VALUES(CURRENT_USER(), CONCAT('Vacuna aplicada: ', NEW.nombre_vacuna, ' a la mascota ', NEW.id_mascota), 'vacunas');
+END$$
+
+DELIMITER ;
+
+
+-- 9. Auditoría al Registrar una Consulta
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_insert_consulta
+AFTER INSERT ON consultas
+FOR EACH ROW
+BEGIN
+    INSERT INTO auditoria(usuario, accion, tabla_afectada)
+    VALUES(CURRENT_USER(), CONCAT('Nueva consulta para mascota ', NEW.id_mascota, ' - Diagnóstico: ', NEW.diagnostico), 'consultas');
+END$$
+
+DELIMITER ;
+
+
+-- 10. Auditoría al Cambiar el Estado de una Cita
+DELIMITER $$
+
+CREATE TRIGGER trg_auditoria_update_cita
+AFTER UPDATE ON citas
+FOR EACH ROW
+BEGIN
+    IF OLD.estado <> NEW.estado THEN
+        INSERT INTO auditoria(usuario, accion, tabla_afectada)
+        VALUES(CURRENT_USER(), CONCAT('Cita ', NEW.id_cita, ' cambió de estado: ', OLD.estado, ' -> ', NEW.estado), 'citas');
+    END IF;
+END$$
+
+DELIMITER ;
