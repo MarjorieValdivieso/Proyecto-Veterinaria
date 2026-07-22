@@ -1756,3 +1756,47 @@ END //
 
 DELIMITER ;
 
+-- 11. RESPALDO Y RECUPERACIÓN
+
+USE Veterinaria_Proyecto;
+
+-- TABLA: bitácora de respaldos realizados
+CREATE TABLE IF NOT EXISTS respaldos (
+    id_respaldo INT AUTO_INCREMENT PRIMARY KEY,
+    tipo_respaldo ENUM('Inicial','Intermedio','Final') NOT NULL,
+    nombre_backup VARCHAR(150) NOT NULL,
+    fecha_backup DATE NOT NULL DEFAULT (CURRENT_DATE),
+    hora_backup TIME NOT NULL DEFAULT (CURRENT_TIME),
+    usuario_responsable VARCHAR(100) NOT NULL
+);
+
+-- PROCEDIMIENTO: registrar un respaldo en la bitácora
+DELIMITER $$
+
+CREATE PROCEDURE RegistrarRespaldo(
+    IN p_tipo VARCHAR(20),
+    IN p_nombre_backup VARCHAR(150),
+    IN p_usuario VARCHAR(100)
+)
+BEGIN
+    INSERT INTO respaldos(tipo_respaldo, nombre_backup, fecha_backup, hora_backup, usuario_responsable)
+    VALUES(p_tipo, p_nombre_backup, CURDATE(), CURTIME(), p_usuario);
+END$$
+
+DELIMITER ;
+
+-- VISTA: consulta rápida de todos los respaldos registrados
+CREATE VIEW vista_respaldos AS
+SELECT tipo_respaldo, nombre_backup, fecha_backup, hora_backup, usuario_responsable
+FROM respaldos
+ORDER BY fecha_backup, hora_backup;
+
+-- REGISTRO de cada respaldo en la bitácora 
+CALL RegistrarRespaldo('Inicial','backup_inicial.sql','usuario_admin');
+CALL RegistrarRespaldo('Intermedio','backup_intermedio.sql','usuario_admin');
+CALL RegistrarRespaldo('Final','backup_final.sql','usuario_admin');
+
+-- Verificación
+SELECT * FROM vista_respaldos;
+
+
