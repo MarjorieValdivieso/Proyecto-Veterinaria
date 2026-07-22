@@ -1216,7 +1216,10 @@ END$$
 DELIMITER ;
 
 -- 4. REGISTRAR DEVOLUCIÓN
--- Registra la devolución e incrementa el stock automáticamente.
+-- Registra la devolución del cliente; el stock se actualiza automáticamente
+-- mediante el trigger trg_incrementar_stock_devolucion.
+
+DROP PROCEDURE IF EXISTS RegistrarDevolucion;
 
 DELIMITER $$
 
@@ -1233,10 +1236,6 @@ BEGIN
     ELSE
         INSERT INTO devoluciones(id_cliente, id_producto, cantidad, motivo)
         VALUES(p_cliente, p_producto, p_cantidad, p_motivo);
-
-        UPDATE inventario
-        SET stock = stock + p_cantidad
-        WHERE id_producto = p_producto;
     END IF;
 END$$
 
