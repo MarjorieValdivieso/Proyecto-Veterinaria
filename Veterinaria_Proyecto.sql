@@ -311,6 +311,53 @@ tabla_afectada VARCHAR(100),
 fecha DATETIME DEFAULT CURRENT_TIMESTAMP
 
 );
+
+-- TABLAS NUEVAS PARA LA PARTE DE TRANSACCIONES 
+
+CREATE TABLE IF NOT EXISTS promociones (
+    id_promocion INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    descuento DECIMAL(5,2) NOT NULL DEFAULT 0.00, -- % de descuento
+    fecha_inicio DATE NOT NULL,
+    fecha_fin DATE NOT NULL,
+    activa TINYINT DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS detalle_venta (
+    id_detalle_venta INT AUTO_INCREMENT PRIMARY KEY,
+    id_venta INT NOT NULL,
+    id_producto INT NOT NULL,
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10,2) NOT NULL,
+    id_promocion INT NULL,
+    CONSTRAINT fk_detventa_venta FOREIGN KEY (id_venta)
+        REFERENCES ventas(id_venta) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_detventa_producto FOREIGN KEY (id_producto)
+        REFERENCES inventario(id_producto) ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT fk_detventa_promocion FOREIGN KEY (id_promocion)
+        REFERENCES promociones(id_promocion) ON UPDATE CASCADE ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS compras (
+    id_compra INT AUTO_INCREMENT PRIMARY KEY,
+    fecha_compra DATE NOT NULL,
+    total DECIMAL(10,2) NOT NULL DEFAULT 0,
+    id_proveedor INT NOT NULL,
+    CONSTRAINT fk_compra_proveedor FOREIGN KEY (id_proveedor)
+        REFERENCES proveedores(id_proveedor) ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS detalle_compra (
+    id_detalle_compra INT AUTO_INCREMENT PRIMARY KEY,
+    id_compra INT NOT NULL,
+    id_producto INT NOT NULL,
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10,2) NOT NULL,
+    CONSTRAINT fk_detcompra_compra FOREIGN KEY (id_compra)
+        REFERENCES compras(id_compra) ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_detcompra_producto FOREIGN KEY (id_producto)
+        REFERENCES inventario(id_producto) ON UPDATE CASCADE ON DELETE RESTRICT
+);
 -- Insertar datos 
 -- CLIENTES (30 registros)
 
@@ -637,6 +684,35 @@ INSERT INTO ventas (fecha_venta, total, id_cliente) VALUES
 ('2025-06-08',23.91,28),
 ('2025-04-14',129.38,18),
 ('2026-06-24',14.25,11);
+
+INSERT INTO promociones (nombre, descuento, fecha_inicio, fecha_fin, activa) VALUES
+('Promo Verano 2026', 10.00, '2026-01-01', '2026-12-31', 1),
+('Descuento Vacunación', 15.00, '2026-01-01', '2026-08-31', 1),
+('Black Friday Mascotas', 20.00, '2026-11-20', '2026-11-30', 1),
+('Promo Fin de Año', 12.50, '2026-12-01', '2026-12-31', 1),
+('Promo Clientes Nuevos', 5.00, '2025-01-01', '2025-12-31', 0);  
+
+ INSERT INTO compras (fecha_compra, total, id_proveedor) VALUES
+('2026-06-10', 1500.00, 3),
+('2026-06-15', 890.50, 4),
+('2026-07-01', 2100.00, 5),
+('2026-07-05', 640.25, 7),
+('2026-07-10', 980.00, 10);
+ 
+ INSERT INTO detalle_compra (id_compra, id_producto, cantidad, precio_unitario) VALUES
+(1, 1, 25, 60.00),
+(2, 7, 40, 22.26),
+(3, 5, 30, 70.00),
+(4, 17, 20, 32.01),
+(5, 6, 15, 65.33);
+ 
+ INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario, id_promocion) VALUES
+(1, 1, 2, 59.13, NULL),
+(2, 3, 1, 43.68, 1),      
+(3, 9, 3, 14.31, NULL),
+(4, 12, 1, 68.82, 3),     
+(5, 20, 5, 23.16, NULL);
+ 
 
 -- CONSULTAS
 
@@ -1498,3 +1574,185 @@ BEGIN
 END$$
 
 DELIMITER ;
+
+TRANSACCIONES
+	
+-- TRANSACCION 1: VENTA COMPLETA
+-- Tablas: ventas, detalle_venta, inventario, promociones
+-- COMMIT si correcto / ROLLBACK si error
+
+DELIMITER //
+
+CREATE PROCEDURE tx_venta(
+    IN p_id_cliente   INT,
+    IN p_id_producto  INT,
+    IN p_cantidad     INT,
+    IN p_id_promocion INT   -- NULL si la venta no aplica ninguna promocion
+)
+BEGIN
+    DECLARE v_precio        DECIMAL(10,2);
+    DECLARE v_stock         INT;
+    DECLARE v_descuento_pct DECIMAL(5,2) DEFAULT 0;
+    DECLARE v_precio_final  DECIMAL(10,2);
+    DECLARE v_total         DECIMAL(10,2);
+    DECLARE v_id_venta      INT;
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'Error: Se aplico ROLLBACK' AS Estado;
+    END;
+
+    START TRANSACTION;
+
+    SELECT precio, stock INTO v_precio, v_stock
+    FROM inventario WHERE id_producto = p_id_producto FOR UPDATE;
+
+    IF v_stock >= p_cantidad THEN
+
+        IF p_id_promocion IS NOT NULL THEN
+            SELECT IFNULL(descuento, 0) INTO v_descuento_pct
+            FROM promociones
+            WHERE id_promocion = p_id_promocion
+              AND activa = 1
+              AND CURDATE() BETWEEN fecha_inicio AND fecha_fin;
+        END IF;
+
+        SET v_precio_final = v_precio - (v_precio * IFNULL(v_descuento_pct, 0) / 100);
+        SET v_total = v_precio_final * p_cantidad;
+
+        INSERT INTO ventas (fecha_venta, total, id_cliente)
+        VALUES (CURDATE(), v_total, p_id_cliente);
+        SET v_id_venta = LAST_INSERT_ID();
+
+        INSERT INTO detalle_venta (id_venta, id_producto, cantidad, precio_unitario, id_promocion)
+        VALUES (v_id_venta, p_id_producto, p_cantidad, v_precio_final, p_id_promocion);
+
+        UPDATE inventario
+        SET stock = stock - p_cantidad
+        WHERE id_producto = p_id_producto;
+
+        COMMIT;
+        SELECT 'Exito: Se guardo la venta ' AS Estado;
+    ELSE
+        ROLLBACK;
+        SELECT 'Error: Sin stock ' AS Estado;
+    END IF;
+END //
+
+DELIMITER ;
+
+-- TRANSACCION 2: DEVOLUCION COMPLETA
+-- Tablas: devoluciones, inventario
+-- Garantia: Atomicidad y consistencia
+
+DELIMITER //
+
+CREATE PROCEDURE tx_devolucion(
+    IN p_id_cliente INT,
+    IN p_id_producto INT,
+    IN p_cantidad INT,
+    IN p_motivo VARCHAR(200)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'Error: Se aplico ROLLBACK' AS Estado;
+    END;
+
+    START TRANSACTION;
+
+    IF NOT EXISTS (SELECT 1 FROM inventario WHERE id_producto = p_id_producto) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Producto inexistente';
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM clientes WHERE id_cliente = p_id_cliente) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Cliente inexistente';
+    END IF;
+
+    INSERT INTO devoluciones (id_cliente, id_producto, cantidad, motivo, fecha_devolucion)
+    VALUES (p_id_cliente, p_id_producto, p_cantidad, p_motivo, CURDATE());
+
+    COMMIT;
+    SELECT 'Exito: Devolucion registrada ' AS Estado;
+END //
+
+DELIMITER ;
+
+-- TRANSACCION 3: COMPRA A PROVEEDOR
+-- Tablas: compras, detalle_compra, inventario
+-- Garantia: Integridad en registro y stock
+
+DELIMITER //
+
+CREATE PROCEDURE tx_compra_proveedor(
+    IN p_id_proveedor INT,
+    IN p_id_producto INT,
+    IN p_cantidad INT,
+    IN p_precio_unitario DECIMAL(10,2)
+)
+BEGIN
+    DECLARE v_id_compra INT;
+    DECLARE v_total DECIMAL(10,2);
+
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'Error: Falla de integridad. ROLLBACK aplicado.' AS Estado;
+    END;
+
+    START TRANSACTION;
+
+    SET v_total = p_cantidad * p_precio_unitario;
+
+    INSERT INTO compras (fecha_compra, total, id_proveedor)
+    VALUES (CURDATE(), v_total, p_id_proveedor);
+    SET v_id_compra = LAST_INSERT_ID();
+
+    INSERT INTO detalle_compra (id_compra, id_producto, cantidad, precio_unitario)
+    VALUES (v_id_compra, p_id_producto, p_cantidad, p_precio_unitario);
+
+    UPDATE inventario
+    SET stock = stock + p_cantidad,
+        precio = p_precio_unitario
+    WHERE id_producto = p_id_producto;
+
+    COMMIT;
+    SELECT 'Exito: Compra registrada con integridad ' AS Estado;
+END //
+
+DELIMITER ;
+
+-- TRANSACCION 4: ACTUALIZACION MASIVA DE INVENTARIO
+-- Tabla: inventario
+-- Garantia: Demuestra ACID (Atomicidad, Consistencia, Aislamiento, Durabilidad)
+
+DELIMITER //
+
+CREATE PROCEDURE tx_masiva_inventario(
+    IN p_id_proveedor INT,
+    IN p_porcentaje_ajuste DECIMAL(5,2)
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        SELECT 'Error: Se rompio la atomicidad. ROLLBACK ejecutado.' AS Estado;
+    END;
+
+    START TRANSACTION;
+
+    UPDATE inventario
+    SET precio = ROUND(precio * (1 + p_porcentaje_ajuste / 100), 2)
+    WHERE id_proveedor = p_id_proveedor;
+
+    INSERT INTO auditoria (usuario, accion, tabla_afectada)
+    VALUES (CURRENT_USER(), CONCAT('Ajuste masivo de ', p_porcentaje_ajuste, '% al proveedor ', p_id_proveedor), 'inventario');
+
+    COMMIT;
+    SELECT 'Exito: actualizacion masiva ACID completada ' AS Estado;
+END //
+
+DELIMITER ;
+
