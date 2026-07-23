@@ -1756,47 +1756,75 @@ END //
 
 DELIMITER ;
 
--- 11. RESPALDO Y RECUPERACIÓN
 
+-- 11. RESPALDO Y RECUPERACIÓN
 USE Veterinaria_Proyecto;
 
--- TABLA: bitácora de respaldos realizados
-CREATE TABLE IF NOT EXISTS respaldos (
+-- CREACIÓN DE LA TABLA DE BITÁCORA DE RESPALDOS
+
+-- La tabla registro_respaldos no se incluyó en los diagramas iniciales (MER)
+-- porque no pertenece al Core Business de la empresa (mascotas, clientes,
+-- ventas), sino a la administración del servidor (DBA). Aplicando el
+-- principio de separación de responsabilidades, las estructuras de
+-- contingencia se definen en la fase de despliegue, manteniendo separada
+-- la lógica del negocio de la operativa.
+
+CREATE TABLE registro_respaldos (
     id_respaldo INT AUTO_INCREMENT PRIMARY KEY,
-    tipo_respaldo ENUM('Inicial','Intermedio','Final') NOT NULL,
-    nombre_backup VARCHAR(150) NOT NULL,
-    fecha_backup DATE NOT NULL DEFAULT (CURRENT_DATE),
-    hora_backup TIME NOT NULL DEFAULT (CURRENT_TIME),
+    tipo_respaldo VARCHAR(50) NOT NULL,
+    nombre_backup VARCHAR(100) NOT NULL,
+    fecha_backup DATE NOT NULL,
+    hora_backup TIME NOT NULL,
     usuario_responsable VARCHAR(100) NOT NULL
 );
 
--- PROCEDIMIENTO: registrar un respaldo en la bitácora
-DELIMITER $$
 
-CREATE PROCEDURE RegistrarRespaldo(
-    IN p_tipo VARCHAR(20),
-    IN p_nombre_backup VARCHAR(150),
-    IN p_usuario VARCHAR(100)
-)
-BEGIN
-    INSERT INTO respaldos(tipo_respaldo, nombre_backup, fecha_backup, hora_backup, usuario_responsable)
-    VALUES(p_tipo, p_nombre_backup, CURDATE(), CURTIME(), p_usuario);
-END$$
+-- REGISTRO DE LOS RESPALDOS SOLICITADOS
 
-DELIMITER ;
-
--- VISTA: consulta rápida de todos los respaldos registrados
-CREATE VIEW vista_respaldos AS
-SELECT tipo_respaldo, nombre_backup, fecha_backup, hora_backup, usuario_responsable
-FROM respaldos
-ORDER BY fecha_backup, hora_backup;
-
--- REGISTRO de cada respaldo en la bitácora 
-CALL RegistrarRespaldo('Inicial','backup_inicial.sql','usuario_admin');
-CALL RegistrarRespaldo('Intermedio','backup_intermedio.sql','usuario_admin');
-CALL RegistrarRespaldo('Final','backup_final.sql','usuario_admin');
+INSERT INTO registro_respaldos
+(tipo_respaldo, nombre_backup, fecha_backup, hora_backup, usuario_responsable)
+VALUES
+('Respaldo inicial', 'backup_inicial_v1.sql', CURDATE(), CURTIME(), CURRENT_USER()),
+('Respaldo intermedio', 'backup_intermedio_v2.sql', CURDATE(), CURTIME(), CURRENT_USER()),
+('Respaldo final', 'backup_final_v3.sql', CURDATE(), CURTIME(), CURRENT_USER());
 
 -- Verificación
-SELECT * FROM vista_respaldos;
+SELECT * FROM registro_respaldos;
 
 
+-- COMANDOS REALES EN CONSOLA DEL SISTEMA (CMD)
+
+-- Ojo: aquí se debe poner el comando con la ruta completa en la que se
+-- encuentra el ejecutable mysqldump.exe y la ruta donde se guardará el
+-- archivo de respaldo.
+--
+-- Ejemplo:
+-- & "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe" -u root -p Veterinaria_Proyecto > "C:\Users\Public\backup_inicial_v1.sql"
+--
+-- Si mysqldump ya está agregado al PATH del sistema, basta con:
+--
+-- mysqldump -u root -p Veterinaria_Proyecto > backup_inicial_v1.sql
+-- mysqldump -u root -p Veterinaria_Proyecto > backup_intermedio_v2.sql
+-- mysqldump -u root -p Veterinaria_Proyecto > backup_final_v3.sql
+
+
+-- EXPORTACIÓN DESDE MYSQL WORKBENCH
+
+-- 1. Abrir el MySQL Workbench.
+-- 2. En el menú inferior, hacer clic en Administración y luego elegir Data Export.
+-- 3. En la lista de schemas, marcar la casilla de la base de datos: Veterinaria_Proyecto.
+-- 4. Elegir "Export to Self-Contained File" e indicar la ruta/nombre del backup
+--    (por ejemplo backup_final_v3.sql).
+-- 5. Click en "Start Export".
+
+
+-- RECUPERACIÓN (RESTORE)
+
+-- Desde consola (CMD):
+-- mysql -u root -p Veterinaria_Proyecto < backup_final_v3.sql
+--
+-- Desde MySQL Workbench:
+-- 1. Menú Administración -> Data Import/Restore.
+-- 2. Seleccionar "Import from Self-Contained File" y elegir el .sql del respaldo.
+-- 3. En "Default Target Schema" elegir o crear Veterinaria_Proyecto.
+-- 4. Click en "Start Import".
