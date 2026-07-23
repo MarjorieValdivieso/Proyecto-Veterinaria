@@ -1575,7 +1575,7 @@ END$$
 
 DELIMITER ;
 
-TRANSACCIONES
+-- TRANSACCIONES
 	
 -- TRANSACCION 1: VENTA COMPLETA
 -- Tablas: ventas, detalle_venta, inventario, promociones
