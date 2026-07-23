@@ -2,6 +2,9 @@
 
 ## Descripción
 Sistema de gestión de base de datos desarrollado en **MySQL** para administrar los procesos de una clínica veterinaria. El proyecto permite gestionar clientes, mascotas, veterinarios, citas, consultas, tratamientos, vacunas, inventario, proveedores, compras y ventas.
+## Integrantes
+- **Marjorie Valdivieso**
+- **Emely Bone**
 
 ## Funcionalidades
 - Diseño del Modelo Entidad-Relación (MER) y Modelo Lógico.
@@ -20,9 +23,4 @@ Sistema de gestión de base de datos desarrollado en **MySQL** para administrar 
 - MySQL Workbench
 - Git
 - GitHub
-## Integrantes
-- **Marjorie Valdivieso**
-- **Emely Bone**
 
-## Licencia
-Este proyecto fue desarrollado con fines académicos para la asignatura de **Bases de Datos**.
